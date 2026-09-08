@@ -4,10 +4,12 @@ import { match } from "ts-pattern";
 import { Button } from "@reactive-resume/ui/components/button";
 import { ScrollArea } from "@reactive-resume/ui/components/scroll-area";
 import { Separator } from "@reactive-resume/ui/components/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@reactive-resume/ui/components/tooltip";
 import { Copyright } from "@/components/ui/copyright";
 import { getSectionIcon, getSectionTitle, rightSidebarSections } from "@/libs/resume/section";
 import { BuilderSidebarEdge } from "../../-components/edge";
 import { useBuilderSidebar } from "../../-store/sidebar";
+import { AtsCheckSectionBuilder } from "./sections/ats-check";
 import { CustomStylesSectionBuilder } from "./sections/custom-styles";
 import { DesignSectionBuilder } from "./sections/design";
 import { ExportSectionBuilder } from "./sections/export";
@@ -15,7 +17,6 @@ import { InformationSectionBuilder } from "./sections/information";
 import { LayoutSectionBuilder } from "./sections/layout";
 import { NotesSectionBuilder } from "./sections/notes";
 import { PageSectionBuilder } from "./sections/page";
-import { ResumeAnalysisSectionBuilder } from "./sections/resume-analysis";
 import { SharingSectionBuilder } from "./sections/sharing";
 import { StatisticsSectionBuilder } from "./sections/statistics";
 import { TemplateSectionBuilder } from "./sections/template";
@@ -32,7 +33,7 @@ function getSectionComponent(type: RightSidebarSection) {
 		.with("notes", () => <NotesSectionBuilder />)
 		.with("sharing", () => <SharingSectionBuilder />)
 		.with("statistics", () => <StatisticsSectionBuilder />)
-		.with("analysis", () => <ResumeAnalysisSectionBuilder />)
+		.with("ats", () => <AtsCheckSectionBuilder />)
 		.with("export", () => <ExportSectionBuilder />)
 		.with("information", () => <InformationSectionBuilder />)
 		.exhaustive();
@@ -43,7 +44,7 @@ export function BuilderSidebarRight() {
 
 	return (
 		<>
-			<SidebarEdge scrollAreaRef={scrollAreaRef} />
+			<SidebarEdge />
 
 			<ScrollArea
 				ref={scrollAreaRef}
@@ -64,22 +65,18 @@ export function BuilderSidebarRight() {
 	);
 }
 
-type SidebarEdgeProps = {
-	scrollAreaRef: React.RefObject<HTMLDivElement | null>;
-};
-
-function SidebarEdge({ scrollAreaRef }: SidebarEdgeProps) {
-	const toggleSidebar = useBuilderSidebar((state) => state.toggleSidebar);
+function SidebarEdge() {
+	const { toggleSidebar } = useBuilderSidebar();
 
 	const scrollToSection = useCallback(
 		(section: RightSidebarSection) => {
-			if (!scrollAreaRef.current) return;
 			toggleSidebar("right", true);
-
-			const sectionElement = scrollAreaRef.current.querySelector(`#sidebar-${section}`);
-			sectionElement?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+			// Section ids are globally unique; document.getElementById reliably resolves the scroll target.
+			document
+				.getElementById(`sidebar-${section}`)
+				?.scrollIntoView({ block: "start", inline: "nearest", behavior: "smooth" });
 		},
-		[toggleSidebar, scrollAreaRef],
+		[toggleSidebar],
 	);
 
 	return (
@@ -87,15 +84,23 @@ function SidebarEdge({ scrollAreaRef }: SidebarEdgeProps) {
 			<div className="no-scrollbar min-h-0 w-full flex-1 overflow-y-auto overflow-x-hidden">
 				<div className="flex min-h-full flex-col items-center justify-center gap-y-2">
 					{rightSidebarSections.map((section) => (
-						<Button
-							key={section}
-							size="icon"
-							variant="ghost"
-							title={getSectionTitle(section)}
-							onClick={() => scrollToSection(section)}
-						>
-							{getSectionIcon(section)}
-						</Button>
+						<Tooltip key={section}>
+							<TooltipTrigger
+								render={
+									<Button
+										size="icon"
+										variant="ghost"
+										aria-label={getSectionTitle(section)}
+										onClick={() => scrollToSection(section)}
+									>
+										{getSectionIcon(section)}
+									</Button>
+								}
+							/>
+							<TooltipContent side="left" className="font-medium">
+								{getSectionTitle(section)}
+							</TooltipContent>
+						</Tooltip>
 					))}
 				</div>
 			</div>

@@ -1,7 +1,6 @@
 import { Trans } from "@lingui/react/macro";
 import { QuotesIcon } from "@phosphor-icons/react";
 import { m } from "motion/react";
-import { useMemo } from "react";
 
 const email = "hello@amruthpillai.com";
 
@@ -70,6 +69,11 @@ type TestimonialColumnData = {
 	testimonials: string[];
 };
 
+const testimonialColumns: TestimonialColumnData[] = [];
+for (let index = 0; index < testimonials.length; index += 2) {
+	testimonialColumns.push({ id: `column-${index / 2}`, testimonials: testimonials.slice(index, index + 2) });
+}
+
 type MarqueeMasonryProps = {
 	columns: TestimonialColumnData[];
 	direction: "left" | "right";
@@ -97,16 +101,6 @@ function MarqueeMasonry({ columns, direction, duration = 30 }: MarqueeMasonryPro
 }
 
 export function Testimonials() {
-	const columns = useMemo(() => {
-		const columns: TestimonialColumnData[] = [];
-
-		for (let index = 0; index < testimonials.length; index += 2) {
-			columns.push({ id: `column-${index / 2}`, testimonials: testimonials.slice(index, index + 2) });
-		}
-
-		return columns;
-	}, []);
-
 	return (
 		<section id="testimonials" className="overflow-hidden py-12 md:py-16 xl:py-20">
 			<m.div
@@ -122,9 +116,8 @@ export function Testimonials() {
 
 				<p className="max-w-4xl text-balance text-muted-foreground leading-relaxed">
 					<Trans>
-						A lot of people have written to me over the years to share their experiences with Reactive Resume and how it
-						has helped them, and I never get tired of reading them. If you have a story to share, let me know by sending
-						me an email at{" "}
+						A lot of people have written to me over the years about how Reactive Resume helped them, and I never get
+						tired of reading those emails. If you have a story to share, write to me at{" "}
 						<a
 							href={`mailto:${email}`}
 							target="_blank"
@@ -145,7 +138,7 @@ export function Testimonials() {
 				{/* Right fade */}
 				<div className="pointer-events-none absolute inset-e-0 top-0 bottom-0 z-10 w-16 bg-linear-to-l from-background to-transparent sm:w-24 md:w-32 lg:w-48" />
 
-				<MarqueeMasonry columns={columns} direction="left" duration={60} />
+				<MarqueeMasonry columns={testimonialColumns} direction="left" duration={60} />
 			</div>
 		</section>
 	);

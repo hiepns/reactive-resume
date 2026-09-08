@@ -3,15 +3,32 @@ import type { TemplatePageProps } from "../../document";
 import type { TemplateColorRoles, TemplateStyleContext, TemplateStyleSlots } from "../shared/types";
 import { Fragment, useMemo } from "react";
 import { rgbaStringToHex } from "@reactive-resume/utils/color";
-import { Image, Page, StyleSheet, View } from "#react-pdf-renderer";
+import { Page, StyleSheet, View } from "#react-pdf-renderer";
 import { useRender } from "../../context";
-import { CustomFieldContactItem, WebsiteContactItem } from "../shared/contact-item";
+import { useRenderedSectionIds, useResolvedNode } from "../../semantic/context";
+import { semanticNodeKeys } from "../../semantic/node-keys";
+import { createBaseTemplateStyles } from "../shared/base-template-styles";
+import {
+	CustomFieldContactItem,
+	EmailContactItem,
+	LocationContactItem,
+	PhoneContactItem,
+	WebsiteContactItem,
+} from "../shared/contact-item";
 import { TemplateProvider } from "../shared/context";
 import { filterSections } from "../shared/filtering";
 import { getTemplateMetrics } from "../shared/metrics";
-import { getTemplatePageMinHeightStyle, getTemplatePageSize } from "../shared/page-size";
+import { PageMarginBackground } from "../shared/page-margin-background";
 import { hasTemplatePicture } from "../shared/picture";
-import { Heading, Icon, Link, Text } from "../shared/primitives";
+import {
+	Heading,
+	SemanticContactListView,
+	SemanticContactRowView,
+	SemanticHeaderPicture,
+	SemanticHeaderView,
+	SemanticRegionView,
+	Text,
+} from "../shared/primitives";
 import { createRtlStyleHelpers } from "../shared/rtl";
 import { Section } from "../shared/sections";
 import { composeStyles, headerNameLineHeight, resolvePlacementColor } from "../shared/styles";
@@ -39,26 +56,36 @@ type ChikoritaHeaderProps = {
 	styles: ChikoritaStyles;
 };
 
-export const ChikoritaPage = ({ page, pageIndex }: TemplatePageProps) => {
+export const ChikoritaPage = ({ page, pageSize, pageMinHeightStyle, showHeader, pageNumber }: TemplatePageProps) => {
 	const data = useRender();
+	const pageNodeKey = semanticNodeKeys.page(pageNumber);
+	const { style: semanticPageStyle, size: semanticPageSize, ...semanticPageProps } = useResolvedNode(pageNodeKey);
 	const { metadata, picture } = data;
 	const { colors, styles } = useChikoritaTemplate();
 	const metrics = getTemplateMetrics(metadata.page);
-	const pageSize = getTemplatePageSize(metadata.page.format);
-	const pageMinHeightStyle = getTemplatePageMinHeightStyle(metadata.page.format);
 	const hasPicture = hasTemplatePicture(picture);
-	const showHeader = pageIndex === 0;
-	const sidebarSections = filterSections(page.sidebar, data);
-	const mainSections = filterSections(page.main, data);
+	const sidebarSections = useRenderedSectionIds(pageNodeKey, filterSections(page.sidebar, data));
+	const mainSections = useRenderedSectionIds(pageNodeKey, filterSections(page.main, data));
+	const sidebarStyle = useResolvedNode(semanticNodeKeys.region(pageNodeKey, "sidebar")).style;
 
 	return (
-		<Page size={pageSize} style={composeStyles(styles.page, pageMinHeightStyle)}>
-			<TemplateProvider styles={styles} colors={colors}>
-				<View
+		<Page
+			{...semanticPageProps}
+			size={semanticPageSize ?? pageSize}
+			style={composeStyles(
+				styles.page,
+				{ paddingVertical: metrics.page.paddingVertical },
+				pageMinHeightStyle,
+				semanticPageStyle,
+			)}
+		>
+			<TemplateProvider pageNodeKey={pageNodeKey} styles={styles} colors={colors}>
+				<SemanticRegionView
+					region="main"
 					style={composeStyles(styles.mainColumn, {
+						marginTop: -metrics.page.paddingVertical,
 						paddingTop: metrics.page.paddingVertical,
 						paddingRight: page.fullWidth ? metrics.page.paddingHorizontal : metrics.columnGap,
-						paddingBottom: metrics.page.paddingVertical,
 						paddingLeft: metrics.page.paddingHorizontal,
 						rowGap: metrics.sectionGap,
 					})}
@@ -68,28 +95,33 @@ export const ChikoritaPage = ({ page, pageIndex }: TemplatePageProps) => {
 					{mainSections.map((section) => (
 						<Section key={section} section={section} placement="main" />
 					))}
-				</View>
+				</SemanticRegionView>
 
-				<View
+				<SemanticRegionView
+					region="sidebar"
 					style={composeStyles(styles.sidebarColumn, {
 						display: page.fullWidth ? "none" : "flex",
 						flexBasis: `${metadata.layout.sidebarWidth}%`,
+						marginTop: -metrics.page.paddingVertical,
 						paddingTop:
 							showHeader && hasPicture
 								? metrics.page.paddingVertical + picture.size + metrics.itemGapY * 3
 								: metrics.page.paddingVertical,
 						paddingRight: metrics.page.paddingHorizontal,
-						paddingBottom: metrics.page.paddingVertical,
 						paddingLeft: metrics.columnGap,
 						rowGap: metrics.sectionGap,
 					})}
 				>
+					<PageMarginBackground
+						color={sidebarStyle?.backgroundColor ?? colors.primary}
+						margin={metrics.page.paddingVertical}
+					/>
 					{sidebarSections.map((section) => (
 						<Fragment key={section}>
 							<Section section={section} placement="sidebar" />
 						</Fragment>
 					))}
-				</View>
+				</SemanticRegionView>
 			</TemplateProvider>
 		</Page>
 	);
@@ -100,8 +132,8 @@ const Header = ({ styles }: ChikoritaHeaderProps) => {
 	const hasPicture = hasTemplatePicture(picture);
 
 	return (
-		<View style={styles.header}>
-			{hasPicture && <Image src={picture.url} style={styles.picture} />}
+		<SemanticHeaderView style={styles.header}>
+			{hasPicture && <SemanticHeaderPicture src={picture.url} style={styles.picture} />}
 
 			<View style={styles.headerTitle}>
 				<View style={styles.headerIdentity}>
@@ -109,37 +141,22 @@ const Header = ({ styles }: ChikoritaHeaderProps) => {
 					<Text>{basics.headline}</Text>
 				</View>
 
-				<View style={styles.headerContactList}>
-					<View style={styles.headerContactRow}>
-						{basics.email && (
-							<Link src={`mailto:${basics.email}`} style={styles.headerContactItem}>
-								<Icon name="envelope" />
-								<Text>{basics.email}</Text>
-							</Link>
-						)}
-						{basics.phone && (
-							<Link src={`tel:${basics.phone}`} style={styles.headerContactItem}>
-								<Icon name="phone" />
-								<Text>{basics.phone}</Text>
-							</Link>
-						)}
-						{basics.location && (
-							<View style={styles.headerContactItem}>
-								<Icon name="map-pin" />
-								<Text>{basics.location}</Text>
-							</View>
-						)}
-					</View>
+				<SemanticContactListView style={styles.headerContactList}>
+					<SemanticContactRowView partKey="contact-row-primary" style={styles.headerContactRow}>
+						<EmailContactItem email={basics.email} style={styles.headerContactItem} />
+						<PhoneContactItem phone={basics.phone} style={styles.headerContactItem} />
+						<LocationContactItem location={basics.location} style={styles.headerContactItem} />
+					</SemanticContactRowView>
 
-					<View style={styles.headerContactRow}>
+					<SemanticContactRowView partKey="contact-row-secondary" style={styles.headerContactRow}>
 						<WebsiteContactItem website={basics.website} style={styles.headerContactItem} />
 						{basics.customFields.map((field) => (
 							<CustomFieldContactItem key={field.id} field={field} style={styles.headerContactItem} />
 						))}
-					</View>
-				</View>
+					</SemanticContactRowView>
+				</SemanticContactListView>
 			</View>
-		</View>
+		</SemanticHeaderView>
 	);
 };
 
@@ -160,80 +177,14 @@ const useChikoritaTemplate = (): ChikoritaTemplate => {
 		};
 		const metrics = getTemplateMetrics(metadata.page);
 
-		const bodyText = {
-			fontFamily: metadata.typography.body.fontFamily,
-			fontSize: metadata.typography.body.fontSize,
-			fontWeight: metadata.typography.body.fontWeights[0] ?? "400",
-			lineHeight: metadata.typography.body.lineHeight,
-			color: foreground,
-			...r.text,
-		} satisfies Style;
+		const base = createBaseTemplateStyles({ metadata, foreground, background, r, metrics, picture });
 
 		const baseStyles = StyleSheet.create({
+			...base,
+			inline: { ...base.inline, columnGap: metrics.gapX(0.25) },
 			page: {
+				...base.page,
 				flexDirection: r.row,
-				color: foreground,
-				backgroundColor: background,
-				fontFamily: metadata.typography.body.fontFamily,
-				fontSize: metadata.typography.body.fontSize,
-				lineHeight: metadata.typography.body.lineHeight,
-				direction: r.pageDirection,
-			},
-			text: bodyText,
-			heading: {
-				fontFamily: metadata.typography.heading.fontFamily,
-				fontSize: metadata.typography.heading.fontSize,
-				fontWeight: metadata.typography.heading.fontWeights.at(-1) ?? "600",
-				lineHeight: metadata.typography.heading.lineHeight,
-				color: foreground,
-				...r.text,
-			},
-			div: {
-				rowGap: metrics.gapY(0.125),
-				columnGap: metrics.gapX(1 / 3),
-			},
-			inline: {
-				flexDirection: r.row,
-				alignItems: "center",
-				columnGap: metrics.gapX(0.25),
-			},
-			link: {
-				textDecoration: "none",
-				color: foreground,
-			},
-			small: {
-				fontSize: metadata.typography.body.fontSize * 0.875,
-			},
-			bold: {
-				fontWeight: metadata.typography.body.fontWeights.at(-1) ?? "600",
-			},
-			richParagraph: {
-				margin: 0,
-				...bodyText,
-			},
-			richListItemRow: {
-				flexDirection: "row",
-				columnGap: metrics.gapX(1 / 3),
-				alignItems: "flex-start",
-			},
-			richListItemMarker: {
-				...bodyText,
-				width: metadata.typography.body.fontSize,
-				textAlign: r.listMarkerTextAlign,
-			},
-			richListItemContent: {
-				...bodyText,
-				flex: 1,
-			},
-			splitRow: {
-				flexDirection: r.row,
-				flexWrap: "wrap",
-				alignItems: "flex-start",
-				justifyContent: "space-between",
-				columnGap: metrics.gapX(2 / 3),
-			},
-			alignEnd: {
-				...r.alignEnd,
 			},
 			section: {
 				flexDirection: "column",
@@ -265,18 +216,6 @@ const useChikoritaTemplate = (): ChikoritaTemplate => {
 				flexDirection: r.row,
 				alignItems: "flex-start",
 				columnGap: metrics.gapX(0.5),
-			},
-			picture: {
-				width: picture.size,
-				height: picture.size,
-				objectFit: "cover",
-				aspectRatio: picture.aspectRatio,
-				borderRadius: picture.borderRadius,
-				borderColor: rgbaStringToHex(picture.borderColor),
-				borderWidth: picture.borderWidth,
-				shadowColor: rgbaStringToHex(picture.shadowColor),
-				shadowWidth: picture.shadowWidth,
-				transform: `rotate(${picture.rotation}deg)`,
 			},
 			headerTitle: {
 				flex: 1,
